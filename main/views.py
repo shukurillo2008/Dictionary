@@ -7,22 +7,33 @@ from rest_framework.views import APIView
 from rest_framework import generics, filters, status
 from datetime import timedelta, datetime
 from rest_framework.response import Response
+from django.core.paginator import Paginator
+from rest_framework.pagination import PageNumberPagination
+
+
+class MyPagination(PageNumberPagination):
+    page_size = 100
+    page_query_param = 'page_size'
 
 
 class HomeView(APIView):
 
     def get_object(self):
         try:
+            # time__day = seven_days_ago.day, time__month = seven_days_ago.month
             seven_days_ago = datetime.now() - timedelta(days=7)
-            words = models.Word.objects.filter(unit__owner = self.request.user,time__day = seven_days_ago.day, time__month = seven_days_ago.month)
+            words = models.Word.objects.filter(unit__owner = self.request.user,time__lte=seven_days_ago)
             return words
         except models.Word.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
         
     def get(self, request):
         words = self.get_object()
-        word_ser = serializers.WordSerializer(words, many = True)
-        return Response(word_ser.data)
+        paginator = MyPagination()
+        page_size = paginator.page_size = 10
+        result_page = paginator.paginate_queryset(words, request)
+        word_ser = serializers.WordSerializer(result_page, many=True)
+        return paginator.get_paginated_response(word_ser.data)
     
     def put(self, request):
         try:
@@ -39,6 +50,7 @@ class OwnWordListView(generics.ListAPIView):
     serializer_class = serializers.WordSerializer
     filter_backends =[filters.SearchFilter]
     search_fields = ['word', 'translation']
+    pagination_class = MyPagination
 
     def get_queryset(self):
         words = models.Word.objects.filter(unit__owner=self.request.user)
@@ -67,6 +79,8 @@ class WordUpdateDestroyView(APIView):
         
     def delete(self,request, pk):
         word = self.get_object(pk)
+        word.unit.elements -= 1
+        word.unit.save()
         word.delete()
         return Response({'data':'updated'})
     
@@ -75,6 +89,7 @@ class OwnUnitList(generics.ListAPIView):
     serializer_class = serializers.UnitSerializer
     filter_backends =[filters.SearchFilter]
     search_fields = ['title',]
+    pagination_class = MyPagination
 
     def get_queryset(self):
         unit = models.Unit.objects.filter(owner=self.request.user)
@@ -112,6 +127,7 @@ class GlobalWordListView(generics.ListAPIView):
     serializer_class = serializers.WordSerializer
     filter_backends =[filters.SearchFilter]
     search_fields = ['word', 'translation']
+    pagination_class = MyPagination
 
     def get_queryset(self):
         return models.Word.objects.filter(unit__status = True)
@@ -121,6 +137,7 @@ class GlobalUnitListView(generics.ListAPIView):
     serializer_class =  serializers.UnitSerializer
     filter_backends =[filters.SearchFilter]
     search_fields = ['title', 'owner__username']
+    pagination_class = MyPagination
 
     def get_queryset(self):
         return models.Unit.objects.filter(status = True)
@@ -147,23 +164,24 @@ class UnitCreateView(APIView):
 
 class WordCreateView(APIView):
     def post(self, request):
-        # try:
+        try:
             word = request.POST.get('word')
             translation = request.POST.get('translation')
             unit_id = request.POST.get('unit_id')
             description = request.POST.get('description')
-
+            unit = models.Unit.objects.get(id = int(unit_id))
             models.Word.objects.create(
                 word = word,
                 translation = translation,
                 time = datetime.now(),
-                unit = models.Unit.objects.get(id = int(unit_id)),
+                unit = unit,
                 description = description
             )
-
+            unit.elements += 1
+            unit.save()
             return Response(status=status.HTTP_201_CREATED)
-        # except:
-        #     return Response(status=status.HTTP_400_BAD_REQUEST)
+        except:
+            return Response(status=status.HTTP_400_BAD_REQUEST)
 
 
 

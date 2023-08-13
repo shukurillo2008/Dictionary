@@ -26,14 +26,14 @@ class Word(models.Model):
 
 
 
-@receiver(post_save, sender=Word)
-@receiver(pre_delete, sender=Word)
-def update_unit_elements(sender, instance, **kwargs):
-    if kwargs.get('created', False):
-        unit = instance.unit
-        unit.elements += 1
-    else:
-        unit = instance.unit
-        unit.elements -= 1
-    unit.save()
+# @receiver(post_save, sender=Word)
+# @receiver(pre_delete, sender=Word)
+# def update_unit_elements(sender, instance, **kwargs):
+#     if kwargs.get('created', False):
+#         unit = instance.unit
+#         unit.elements += 1
+#     else:
+#         unit = instance.unit
+#         unit.elements -= 1
+#     unit.save()
 
